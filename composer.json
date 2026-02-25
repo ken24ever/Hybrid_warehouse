@@ -1,0 +1,14 @@
+{
+    "name": "inventory-keeper/inventory-app",
+    "description": "App for store mamangement",
+    "type": "project",
+    "authors": [
+        {
+            "name": "y"
+        }
+    ],
+    "require": {
+        "phpoffice/phpspreadsheet": "^1.17"
+    }
+    
+}

@@ -1,0 +1,238 @@
+/* Light Theme Variables */
+.light-theme {
+  --background-color: #f8f9fa !important; /* Softer, elegant background */
+  --primary-color: #007bff !important; /* Bootstrap primary */
+  --secondary-color: #6c757d !important; /* Secondary accents */
+  --text-color: #212529 !important; /* Main body text */
+  --heading-color: #343a40 !important; /* Headings */
+  --border-color: #dee2e6 !important; /* Borders for elements */
+  --link-color: #0056b3 !important; /* Slightly darker for accessibility */
+  --font-size: 16px !important; /* Responsive and readable */
+  --shadow-light: rgba(0, 0, 0, 0.1);
+  --danger-color: #dc3545 !important;
+  --tale-color: #a29bfe !important;
+  --dark-blue-color: #1e3a8a !important;
+}
+
+/* Apply the theme */
+.light-theme body {
+  background-color: var(--background-color) !important;
+  color: var(--text-color) !important;
+  font-size: var(--font-size);
+  zoom: 75% !important;/* adjust zoom */
+  font-family: 'Poppins', sans-serif;
+  transition: all 0.3s ease-in-out;
+}
+
+
+
+/* Navbar */
+.light-theme .navbar {
+  background-color: var(--background-color) !important;
+  border-bottom: 1px solid var(--border-color);
+  box-shadow: 0px 4px 6px var(--shadow-light);
+}
+.light-theme .navbar-brand {
+  color: var(--text-color) !important;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+.light-theme .navbar-nav .nav-link {
+  color: var(--text-color) !important;
+  transition: color 0.3s ease-in-out;
+}
+.light-theme .navbar-nav .nav-link:hover {
+  color: var(--primary-color) !important;
+}
+
+/* Buttons */
+.light-theme .btn-primary {
+  background-color: var(--primary-color) !important;
+  border-color: var(--primary-color) !important;
+  color: #fff !important;
+  border-radius: 6px;
+  transition: all 0.3s ease-in-out;
+}
+.light-theme .btn-primary:hover {
+  background-color: #0056b3 !important;
+  border-color: #004085 !important;
+}
+
+/* Card Styling */
+.light-theme .card {
+  background-color: #ffffff !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 8px;
+  box-shadow: 0px 4px 8px var(--shadow-light);
+  transition: transform 0.2s ease-in-out;
+}
+.light-theme .card:hover {
+  transform: scale(1.02);
+}
+.light-theme .card-title {
+  color: var(--heading-color) !important;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+/* Custom Card Colors */
+.light-theme .card-light-danger {
+  background-color: var(--danger-color) !important;
+  color: #ffffff !important;
+}
+.light-theme .card-light-danger .card-title,
+.light-theme .card-light-danger .card-text {
+  color: #ffffff !important;
+}
+
+.light-theme .card-tale {
+  background-color: var(--tale-color) !important;
+  color: #ffffff !important;
+}
+.light-theme .card-tale .card-title,
+.light-theme .card-tale .card-text {
+  color: #ffffff !important;
+}
+
+.light-theme .card-dark-blue {
+  background-color: var(--dark-blue-color) !important;
+  color: #ffffff !important;
+}
+
+.light-theme .card-light-blue {
+  background-color: var(--dark-blue-color) !important;
+  color: #ffffff !important;
+}
+.light-theme .card-dark-blue .card-title,
+.light-theme .card-dark-blue .card-text {
+  color: #ffffff !important;
+}
+
+/* Tables */
+.light-theme .table {
+  background-color: #fff !important;
+  border-radius: 6px;
+  
+}
+.light-theme .table th {
+  background-color: var(--primary-color) !important;
+  color: #ffffff !important;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+.light-theme .table td, 
+.light-theme .table th {
+  padding: 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+.light-theme .table-striped tbody tr:nth-of-type(odd) {
+  background-color: #f1f3f5 !important;
+}
+
+        /* Custom styles for the modal and table */
+      .light-theme     
+        .modal {
+            display: none;
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.5);
+        }
+
+/* Modals */
+.light-theme .modal-content {
+  background-color: #ffffff !important;
+  border-radius: 8px;
+  box-shadow: 0px 6px 12px var(--shadow-light);
+
+     margin: 5% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 95%;
+            max-width: 1200px; /* Increased max-width for xl */
+    z-index: 1000;
+
+}
+
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            font-size: 1.5rem;
+            color: #1a202c;
+        }
+
+             .close-button {
+            color: #a0aec0;
+            font-size: 2rem;
+            font-weight: bold;
+            cursor: pointer !important;
+            transition: color 0.2s ease;
+        }
+
+/* Forms */
+.light-theme input, 
+.light-theme select, 
+.light-theme textarea {
+  border: 1px solid var(--border-color) !important;
+  border-radius: 6px !important;
+  padding: 10px;
+  transition: all 0.3s ease-in-out;
+}
+.light-theme input:focus, 
+.light-theme select:focus, 
+.light-theme textarea:focus {
+  border-color: var(--primary-color) !important;
+  box-shadow: 0px 0px 5px rgba(0, 123, 255, 0.5) !important;
+}
+
+/* Links */
+.light-theme a {
+  color: var(--link-color) !important;
+  text-decoration: none !important;
+  transition: all 0.3s ease-in-out;
+}
+.light-theme a:hover {
+  text-decoration: none !important;
+  color: var(--primary-color) !important;
+}
+
+/* Alerts */
+.light-theme .alert {
+  border-radius: 6px;
+  box-shadow: 0px 4px 6px var(--shadow-light);
+}
+
+/* Footer */
+.light-theme .footer {
+  background-color: var(--background-color) !important;
+  color: var(--text-color) !important;
+  text-align: center;
+  padding: 15px 0;
+  font-size: 14px;
+  border-top: 1px solid var(--border-color);
+}
+
+/* Responsive Tweaks */
+@media (max-width: 768px) {
+  .light-theme .navbar-brand {
+      font-size: 18px;
+  }
+  .light-theme .table th,
+  .light-theme .table td {
+      padding: 8px;
+      font-size: 14px;
+  }
+}

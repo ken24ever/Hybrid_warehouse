@@ -1,9 +1,11 @@
 <?php
 // get_branches.php
+session_start();
 
-// Disable display errors to ensure clean JSON output
+// Disable display errors to ensure clean JSON output 
 error_reporting(E_ALL);
 ini_set('display_errors', 0);
+
 
 $branches = [];
 $cloud_success = false;
@@ -60,21 +62,25 @@ if (!$cloud_success || empty($branches)) {
     }
 }
 
-// --- 4. ENSURE HEAD_OFFICE EXISTS ---
-// If specifically HEAD_OFFICE is missing from the list (local or cloud), add it manually as default
-$hasHeadOffice = false;
-foreach ($branches as $b) {
-    if ($b['branch_code'] === 'HEAD_OFFICE') {
-        $hasHeadOffice = true;
-        break;
-    }
-}
+// --- 4. ENSURE ACTIVE SESSION BRANCH EXISTS ---
+$hasSessionBranch = false;
+$sessionBranchCode = $_SESSION['branch_code'] ?? null;
+$sessionBranchName = $_SESSION['branch_name'] ?? $sessionBranchCode;
 
-if (!$hasHeadOffice) {
-    array_unshift($branches, [
-        'branch_code' => 'HEAD_OFFICE',
-        'branch_name' => 'HEAD OFFICE (Default)'
-    ]);
+if ($sessionBranchCode) {
+    foreach ($branches as $b) {
+        if ($b['branch_code'] === $sessionBranchCode) {
+            $hasSessionBranch = true;
+            break;
+        }
+    }
+
+    if (!$hasSessionBranch) {
+        array_unshift($branches, [
+            'branch_code' => $sessionBranchCode,
+            'branch_name' => $sessionBranchName . ' (Active View)'
+        ]);
+    }
 }
 
 // --- 5. RETURN JSON ---

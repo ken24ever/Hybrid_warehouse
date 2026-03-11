@@ -12,7 +12,7 @@ $API_KEY = "JEMERALD_SECURE_2025";
 $SYNC_STATE_FILE = 'last_pull_state.json';
 
 // 1. GET BRANCH CONTEXT
-$CURRENT_BRANCH_CODE = $_SESSION['branch_code'] ?? 'HEAD_OFFICE';
+$CURRENT_BRANCH_CODE = $_SESSION['branch_code'];
 
 // 2. READ LAST SYNC CURSORS
 $cursors = ['last_change_id' => 0];
@@ -62,8 +62,30 @@ try {
     $db = new PDO("sqlite:$db_path");
     $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $db->exec("PRAGMA busy_timeout = 5000;");
+
+    // ------------------------------------------------------------------
+    // [PROFESSIONAL FIX] PROACTIVE SCHEMA HEALING
+    // Checks all core tables for the 'updated_at' column before starting 
+    // the massive sync transaction. If missing, it patches the schema on the fly.
+    // ------------------------------------------------------------------
+    $tables_to_heal = ['items', 'transactions', 'item_categories', 'audit_logs', 'users', 'suppliers'];
+    foreach ($tables_to_heal as $tbl) {
+        try {
+            // Attempt to read the column
+            $db->exec("SELECT updated_at FROM $tbl LIMIT 1");
+        } catch (Exception $schemaEx) {
+// [PROFESSIONAL FIX] SQLite forbids non-constant defaults (like CURRENT_TIMESTAMP) 
+            // during an ALTER TABLE operation. Using DEFAULT NULL safely bypasses this restriction.
+            if (strpos($schemaEx->getMessage(), 'no such column') !== false) {
+                $db->exec("ALTER TABLE $tbl ADD COLUMN updated_at TEXT DEFAULT NULL");
+            }
+        }
+    }
+    // ------------------------------------------------------------------
+
 } catch (Exception $e) {
-    die(json_encode(["status" => "error", "msg" => "Local DB Error"]));
+    // Also exposing the actual PDO error here so future DB issues aren't hidden
+    die(json_encode(["status" => "error", "msg" => "Local DB Error: " . $e->getMessage()]));
 }
 
 $stats = [

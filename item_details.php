@@ -11,7 +11,7 @@ header('Content-Type: application/json');
 $searchTerm = isset($_GET['searchTerm']) ? trim($_GET['searchTerm']) : '';
 
 // 2. CONTEXT RESOLUTION
-$session_branch   = $_SESSION['branch_code'] ?? 'HEAD_OFFICE';
+$session_branch   = $_SESSION['branch_code'];
 $requested_branch = $_GET['branch_code'] ?? $session_branch;
 $is_remote        = ($requested_branch !== $session_branch);
 

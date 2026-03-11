@@ -217,7 +217,7 @@ $offline_link = "superAdmin.php?branch_uuid=" . urlencode($my_branch_code) .
         
 <div class="hub-header text-center position-relative" :class="{'mode-offline': source === 'local'}">
     
-<div class="header-controls-left">
+    <div class="header-controls-left">
         
         <a href="logout.php" class="header-control-btn" title="Sign out of the system">
             <i class="fas fa-sign-out-alt"></i> 
@@ -228,6 +228,13 @@ $offline_link = "superAdmin.php?branch_uuid=" . urlencode($my_branch_code) .
             <i class="fas fa-stethoscope"></i> 
             <span class="d-none d-sm-inline ml-2">Server Status</span>
         </a>
+
+        <?php if (isset($_SESSION['role']) && $_SESSION['role'] === 'Super Admin' && $_SESSION['branch_code'] !== 'HOME_OFFICE'): ?>
+        <a href="superAdmin.php" class="header-control-btn text-success" title="Access Local Branch Dashboard">
+            <i class="fas fa-store-alt"></i> 
+            <span class="d-none d-sm-inline ml-2">Local Branch</span>
+        </a>
+        <?php endif; ?>
 
         <?php if (isset($_SESSION['branch_code']) && $_SESSION['branch_code'] === 'HOME_OFFICE'): ?>
         <a href="setup_ceo.php" class="header-control-btn text-info" title="Manage CEO Login Credentials">

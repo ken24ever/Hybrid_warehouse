@@ -6,7 +6,7 @@ header('Content-Type: application/json');
 
 $API_URL = "https://jemeraldstores.com/jemerald_api/receive.php";  
 $API_KEY = "JEMERALD_SECURE_2025";
-$CURRENT_BRANCH_CODE = $_SESSION['branch_code'] ?? "HEAD_OFFICE"; 
+$CURRENT_BRANCH_CODE = $_SESSION['branch_code'] ; 
 
 $db_path = 'warehouse_v2.0.db';
 try {
@@ -67,12 +67,18 @@ foreach ($tables_to_sync as $table => $pk_col) {
                     $actual_pk_val = $row['id'];
                 }
 
-                if ($actual_pk_val === null) continue; // Skip if ID not found
+              if ($actual_pk_val === null) continue; // Skip if ID not found
 
                 // Standardize for Cloud
                 $row['local_id'] = $actual_pk_val;
 
                 // --- DATA CLEANING ---
+                // [PROFESSIONAL FIX] Strip the local 'updated_at' column so the Cloud 
+                // doesn't reject the payload with an "Unknown column" SQL exception.
+                if (array_key_exists('updated_at', $row)) {
+                    unset($row['updated_at']);
+                }
+
                 if ($table === 'items') {
                     if (isset($row['wholesale'])) { $row['wholesale_price'] = $row['wholesale']; unset($row['wholesale']); }
                     if (isset($row['retail']))    { $row['retail_price'] = $row['retail'];       unset($row['retail']); }
@@ -152,6 +158,7 @@ if ($http_code == 200 && isset($result['status']) && $result['status'] === 'succ
     $db->beginTransaction();
     $total_marked = 0;
     $real_updates = 0;
+    $ack_warnings = []; // Track non-fatal errors
 
     try {
         foreach ($acked_ids as $table => $ids) {
@@ -161,9 +168,7 @@ if ($http_code == 200 && isset($result['status']) && $result['status'] === 'succ
             $pk_name = 'id';
             if (isset($tables_to_sync[$table])) {
                 $pk_name = ($tables_to_sync[$table] === 'rowid') ? 'rowid' : $tables_to_sync[$table];
-            } 
-            // Fallback for safety
-            elseif ($table === 'suppliers') {
+            } elseif ($table === 'suppliers') {
                 $pk_name = 'supplier_id';
             }
 
@@ -171,17 +176,46 @@ if ($http_code == 200 && isset($result['status']) && $result['status'] === 'succ
             $inQuery = implode(',', array_fill(0, count($clean_ids), '?'));
             
             $sql = "UPDATE $table SET sync_status = 1 WHERE $pk_name IN ($inQuery)";
-            $stmt = $db->prepare($sql);
-            $stmt->execute($clean_ids);
             
-            $total_marked += count($clean_ids);
-            $real_updates += $stmt->rowCount(); 
+            try {
+                $stmt = $db->prepare($sql);
+                $stmt->execute($clean_ids);
+                $total_marked += count($clean_ids);
+                $real_updates += $stmt->rowCount(); 
+            } catch (Exception $ex) {
+                // ------------------------------------------------------------------
+                // [PROFESSIONAL FIX] SELF-HEALING SCHEMA PATCH
+                // If a local DB trigger fails because the 'updated_at' column is missing,
+                // automatically create the column and retry the update instantly.
+                // ------------------------------------------------------------------
+       if (strpos($ex->getMessage(), 'no such column: updated_at') !== false) {
+                    try {
+                        // [PROFESSIONAL FIX] Use DEFAULT NULL to satisfy SQLite ALTER TABLE constraints
+                        $db->exec("ALTER TABLE $table ADD COLUMN updated_at TEXT DEFAULT NULL");
+                        // Retry the update
+                        $stmt = $db->prepare($sql);
+                        $stmt->execute($clean_ids);
+                        $total_marked += count($clean_ids);
+                        $real_updates += $stmt->rowCount(); 
+                    } catch (Exception $retryEx) {
+                        $ack_warnings[] = "Table $table (Retry Failed): " . $retryEx->getMessage();
+                    }
+                } else {
+                    $ack_warnings[] = "Table $table: " . $ex->getMessage();
+                }
+            }
         }
+        
         $db->commit();
         
-        $msg = "Synced successfully ($real_updates items updated locally)";
+        $msg = "Synced successfully ($real_updates items updated locally).";
+        
+        // Append any warnings that didn't stop the sync
+        if (!empty($ack_warnings)) {
+            $msg .= " Note: " . implode(" | ", $ack_warnings);
+        }
         if ($cloud_warnings && $real_updates == 0) {
-            $msg .= " - Warning: Cloud rejected items. Reason: $cloud_warnings";
+            $msg .= " Cloud Note: $cloud_warnings";
         }
         
         echo json_encode([

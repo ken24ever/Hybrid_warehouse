@@ -1,154 +1,156 @@
 <?php
 // process_sale.php
-// VERSION: ULTIMATE SERVER-LEVEL DEBUGGER
-
-// 1. Force error reporting locally
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-
-// [PROFESSIONAL FIX] The Ultimate Safety Net for Server-Level Crashes
-register_shutdown_function(function() {
-    $error = error_get_last();
-    // Catch fatal errors, parse errors, and memory exhaustion
-    if ($error !== null && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR])) {
-        http_response_code(200); // Force 200 so JS can read the response
-        header('Content-Type: application/json');
-        echo json_encode([
-            'success' => false, 
-            'message' => "FATAL SERVER CRASH: " . $error['message'] . " | File: " . $error['file'] . " | Line: " . $error['line']
-        ]);
-        exit;
-    }
-});
-
-// Prevent MySQLi from throwing fatal exceptions
-mysqli_report(MYSQLI_REPORT_OFF);
+// VERSION: HYBRID COST FETCH + STOCK VALIDATION + MATH FIX + STRICT ISOLATION
+error_reporting(0);
+ini_set('display_errors', 0);
 
 session_start();
 header('Content-Type: application/json'); 
 
+include('connection.php'); 
+
+// --- 1. DETERMINE CONTEXT ---
+if (!isset($_SESSION['branch_code'])) {
+    die(json_encode(['success' => false, 'message' => 'Session Error: User context not found. Please relogin.']));
+}
+
+$session_branch = $_SESSION['branch_code']; 
+$userID         = $_SESSION['user_id'] ?? 0;
+$target_branch  = $session_branch; 
+
+if (isset($_POST['target_branch_code']) && !empty($_POST['target_branch_code'])) {
+    if (isset($_SESSION['role']) && $_SESSION['role'] === 'Super Admin') {
+        $target_branch = $_POST['target_branch_code'];
+    }
+}
+
+$is_remote_sale = ($target_branch !== $session_branch);
+$cartItems = json_decode($_POST['cartItems'], true);
+
+$modeOfPayment = $_POST['modeOfPayment'] ?? '';
+if (empty($modeOfPayment) && !empty($cartItems) && isset($cartItems[0]['modeOfPayment'])) {
+    $modeOfPayment = $cartItems[0]['modeOfPayment'];
+}
+if (empty($modeOfPayment)) {
+    die(json_encode(['success' => false, 'message' => 'Critical Error: Mode of Payment is missing.']));
+}
+
+// --- 2. CLOUD CONNECTION ---
+$cloud_host = 'srv1254.hstgr.io';
+$cloud_user = 'u106033383_jemerald1234';
+$cloud_pass = 'Wearelive_1234';
+$cloud_name = 'u106033383_jemerald_cloud';
+
+$cloud_conn = null;
+$cloudUserID = 0;
+
 try {
-    include('connection.php'); 
-    
-    // --- 1. DETERMINE CONTEXT ---
-    if (!isset($_SESSION['branch_code'])) {
-        throw new Exception('Session Error: User context not found. Please relogin.');
+    $cloud_conn = @new mysqli($cloud_host, $cloud_user, $cloud_pass, $cloud_name);
+    if ($cloud_conn->connect_error) {
+        if ($is_remote_sale) throw new Exception("Cloud connection failed: " . $cloud_conn->connect_error);
+        $cloud_conn = null;
     }
 
-    $session_branch = $_SESSION['branch_code']; 
-    $userID         = $_SESSION['user_id'] ?? 0;
-    $target_branch  = $session_branch; 
+    // ------------------------------------------------------------------
+            // [PROFESSIONAL FIX] REAL-TIME HEARTBEAT CHECK
+            // We verify if the branch is TRULY online by checking 'last_active_at'.
+            // ------------------------------------------------------------------
+            $heartbeat_sql = "SELECT TIMESTAMPDIFF(SECOND, last_active_at, NOW()) as seconds_ago 
+                              FROM branches WHERE branch_code = ? LIMIT 1";
+            
+            $hb_stmt = $cloud_conn->prepare($heartbeat_sql);
+            if ($hb_stmt) {
+                $hb_stmt->bind_param("s", $target_branch);
+                $hb_stmt->execute();
+                $hb_res = $hb_stmt->get_result();
+                $hb_row = $hb_res->fetch_assoc();
+                $hb_stmt->close();
 
-    if (isset($_POST['target_branch_code']) && !empty($_POST['target_branch_code'])) {
-        if (isset($_SESSION['role']) && $_SESSION['role'] === 'Super Admin') {
-            $target_branch = $_POST['target_branch_code'];
-        }
-    }
+                $seconds_ago = $hb_row['seconds_ago']; 
 
-    $is_remote_sale = ($target_branch !== $session_branch);
-    $cartItems = json_decode($_POST['cartItems'], true);
-
-    $modeOfPayment = $_POST['modeOfPayment'] ?? '';
-    if (empty($modeOfPayment) && !empty($cartItems) && isset($cartItems[0]['modeOfPayment'])) {
-        $modeOfPayment = $cartItems[0]['modeOfPayment'];
-    }
-    if (empty($modeOfPayment)) {
-        throw new Exception('Critical Error: Mode of Payment is missing.');
-    }
-
-    // --- 2. CLOUD CONNECTION ---
-    $cloud_host = 'srv1254.hstgr.io';
-    $cloud_user = 'u106033383_jemerald1234';
-    $cloud_pass = 'Wearelive_1234';
-    $cloud_name = 'u106033383_jemerald_cloud';
-
-    $cloud_conn = null;
-    $cloudUserID = 0;
-
-    if ($is_remote_sale) {
-        $cloud_conn = @new mysqli($cloud_host, $cloud_user, $cloud_pass, $cloud_name);
-        if ($cloud_conn->connect_error) {
-            throw new Exception("Cloud connection failed: " . $cloud_conn->connect_error);
-        }
-
-        // Real-Time Heartbeat Check
-        $heartbeat_sql = "SELECT TIMESTAMPDIFF(SECOND, last_active_at, NOW()) as seconds_ago FROM branches WHERE branch_code = ? LIMIT 1";
-        $hb_stmt = $cloud_conn->prepare($heartbeat_sql);
-        if ($hb_stmt) {
-            $hb_stmt->bind_param("s", $target_branch);
-            $hb_stmt->execute();
-            $hb_res = $hb_stmt->get_result();
-            $hb_row = $hb_res->fetch_assoc();
-            $hb_stmt->close();
-
-            $seconds_ago = $hb_row['seconds_ago'] ?? null; 
-
-            if ($seconds_ago === null || $seconds_ago > 300) {
-                $mins = ($seconds_ago) ? round($seconds_ago / 60) : 'N/A';
-                throw new Exception("Transaction Blocked: The branch '$target_branch' is OFFLINE (Last seen $mins mins ago). Remote sales require an active connection to sync stock.");
-            }
-        } else {
-            throw new Exception("System Error: Could not verify branch status. " . $cloud_conn->error);
-        }
-    }
-
-    // --- 3. RESOLVE CLOUD IDENTITY ---
-    if ($is_remote_sale && $cloud_conn) {
-        $uStmt = $cloud_conn->prepare("SELECT id FROM users WHERE local_id = ? AND branch_code = ?");
-        if ($uStmt) {
-            $uStmt->bind_param("is", $userID, $session_branch);
-            $uStmt->execute();
-            $res = $uStmt->get_result();
-            if ($row = $res->fetch_assoc()) {
-                $cloudUserID = $row['id'];
-            }
-            $uStmt->close();
-        }
-
-        if ($cloudUserID === 0 && isset($_SESSION['username'])) {
-            $uStmt2 = $cloud_conn->prepare("SELECT id FROM users WHERE username = ? AND branch_code = ?");
-            if ($uStmt2) {
-                $username = $_SESSION['username'];
-                $uStmt2->bind_param("ss", $username, $session_branch);
-                $uStmt2->execute();
-                $res2 = $uStmt2->get_result();
-                if ($row2 = $res2->fetch_assoc()) {
-                    $cloudUserID = $row2['id'];
+                // THRESHOLD: 300 Seconds (5 Minutes)
+                // If it returns NULL (never active) or > 300s, the branch is Offline.
+                if ($seconds_ago === null || $seconds_ago > 300) {
+                    $mins = ($seconds_ago) ? round($seconds_ago / 60) : 'N/A';
+                    throw new Exception("Transaction Blocked: The branch '$target_branch' is OFFLINE (Last seen $mins mins ago). Remote sales require an active connection to sync stock.");
                 }
-                $uStmt2->close();
+            } else {
+                throw new Exception("System Error: Could not verify branch status.");
             }
+            // ------------------------------------------------------------------
+
+} catch (Exception $e) {
+    if ($is_remote_sale) {
+        echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        exit;
+    }
+    
+    $cloud_conn = null;
+}
+
+// --- 3. RESOLVE CLOUD IDENTITY ---
+if ($is_remote_sale && $cloud_conn) {
+    $uStmt = $cloud_conn->prepare("SELECT id FROM users WHERE local_id = ? AND branch_code = ?");
+    if ($uStmt) {
+        $uStmt->bind_param("is", $userID, $session_branch);
+        $uStmt->execute();
+        $res = $uStmt->get_result();
+        if ($row = $res->fetch_assoc()) {
+            $cloudUserID = $row['id'];
         }
+        $uStmt->close();
     }
 
-    // --- 4. PROCESS SALE ---
-    $transactionGroupID = 1000; 
-
-    if ($is_remote_sale && $cloud_conn) {
-        $grpQuery = $cloud_conn->query("SELECT transaction_group_id FROM transactions ORDER BY id DESC LIMIT 1");
-        if ($grpQuery && $row = $grpQuery->fetch_assoc()) {
-            $lastGrp = intval($row['transaction_group_id']);
-            if ($lastGrp >= 1000 && $lastGrp < 9999) {
-                $transactionGroupID = $lastGrp + 1;
+    if ($cloudUserID === 0 && isset($_SESSION['username'])) {
+        $uStmt2 = $cloud_conn->prepare("SELECT id FROM users WHERE username = ? AND branch_code = ?");
+        if ($uStmt2) {
+            $username = $_SESSION['username'];
+            $uStmt2->bind_param("ss", $username, $session_branch);
+            $uStmt2->execute();
+            $res2 = $uStmt2->get_result();
+            if ($row2 = $res2->fetch_assoc()) {
+                $cloudUserID = $row2['id'];
             }
-        }
-    } else {
-        $grpQuery = $conn->query("SELECT transaction_group_id FROM transactions ORDER BY transaction_id DESC LIMIT 1");
-        if ($grpQuery && $row = $grpQuery->fetchArray(SQLITE3_ASSOC)) {
-            $lastGrp = intval($row['transaction_group_id']);
-            if ($lastGrp >= 1000 && $lastGrp < 9999) {
-                $transactionGroupID = $lastGrp + 1;
-            }
+            $uStmt2->close();
         }
     }
+}
 
-    $transactionDate = date('Y-m-d H:i:s'); 
-    if (!empty($cartItems) && isset($cartItems[0]['EditTransactionDate']) && !empty($cartItems[0]['EditTransactionDate'])) {
-        $transactionDate = date('Y-m-d H:i:s', strtotime($cartItems[0]['EditTransactionDate']));
+// --- 4. PROCESS SALE ---
+$transactionGroupID = 1000; 
+
+if ($is_remote_sale && $cloud_conn) {
+    $grpQuery = $cloud_conn->query("SELECT transaction_group_id FROM transactions ORDER BY id DESC LIMIT 1");
+    if ($row = $grpQuery->fetch_assoc()) {
+        $lastGrp = intval($row['transaction_group_id']);
+        if ($lastGrp >= 1000 && $lastGrp < 9999) {
+            $transactionGroupID = $lastGrp + 1;
+        }
     }
+} else {
+    $grpQuery = $conn->query("SELECT transaction_group_id FROM transactions ORDER BY transaction_id DESC LIMIT 1");
+    if ($row = $grpQuery->fetchArray(SQLITE3_ASSOC)) {
+        $lastGrp = intval($row['transaction_group_id']);
+        if ($lastGrp >= 1000 && $lastGrp < 9999) {
+            $transactionGroupID = $lastGrp + 1;
+        }
+    }
+}
 
-    $conn->exec("BEGIN TRANSACTION");
-    $transaction_started = true;
 
+// --- DATE RESOLUTION LOGIC ---
+// Default to NOW
+$transactionDate = date('Y-m-d H:i:s'); 
+
+// Check if a custom backdate was sent in the cart data
+if (!empty($cartItems) && isset($cartItems[0]['EditTransactionDate']) && !empty($cartItems[0]['EditTransactionDate'])) {
+    // Format the incoming HTML datetime-local (Y-m-d\TH:i) to MySQL format (Y-m-d H:i:s)
+    $transactionDate = date('Y-m-d H:i:s', strtotime($cartItems[0]['EditTransactionDate']));
+}
+
+$conn->exec("BEGIN TRANSACTION");
+
+try {
     foreach ($cartItems as $item) {
         $item_id = $item['id'] ?? 0;
         if (empty($item_id)) throw new Exception("Critical: Item ID missing.");
@@ -171,12 +173,8 @@ try {
                     $itemName = $cloudRow['item_name'];
                     $purchasePrice = floatval($cloudRow['purchase_price']);
                     $currentStock = intval($cloudRow['quantity_in_stock']); 
-                } else {
-                    throw new Exception("Error: Item '$itemName' does not exist in the Remote Database.");
                 }
                 $p_stmt->close();
-            } else {
-                throw new Exception("Database Error: " . $cloud_conn->error);
             }
         } else {
             $stmt = $conn->prepare("SELECT item_name, purchase_price, quantity_in_stock FROM items WHERE item_id = :id");
@@ -186,8 +184,6 @@ try {
                 $itemName = $localRow['item_name'];
                 $purchasePrice = floatval($localRow['purchase_price']);
                 $currentStock = intval($localRow['quantity_in_stock']); 
-            } else {
-                throw new Exception("Error: Item '$itemName' does not exist in the Local Database.");
             }
         }
 
@@ -209,6 +205,9 @@ try {
         
         $profit = $totalAmount - ($purchasePrice * $quantity);
 
+        // ========================================================== 
+        // STRICT CONTEXT ISOLATION: LOCAL VS REMOTE SALE
+        // ==========================================================
         if (!$is_remote_sale) {
             
             $sql = "INSERT INTO transactions (
@@ -223,32 +222,7 @@ try {
                         :profit_val, :fixed_price
                     )";
             
-            // ------------------------------------------------------------------
-            // [PROFESSIONAL FIX] SELF-HEALING SCHEMA PATCH
-            // If the branch server's database is outdated and missing columns,
-            // we catch the 'prepare' failure, inject the columns, and retry safely.
-            // ------------------------------------------------------------------
-            $stmt = @$conn->prepare($sql);
-            
-            if (!$stmt) {
-                $errMsg = $conn->lastErrorMsg();
-                if (strpos($errMsg, 'has no column') !== false) {
-                    // Silently patch the missing columns into the SQLite database
-                    @$conn->exec("ALTER TABLE transactions ADD COLUMN profit REAL DEFAULT 0.0");
-                    @$conn->exec("ALTER TABLE transactions ADD COLUMN fixed_price_at_sale REAL DEFAULT 0.0");
-                    @$conn->exec("ALTER TABLE transactions ADD COLUMN branch_code TEXT DEFAULT NULL");
-                    
-                    // Retry preparing the statement now that the table is fixed
-                    $stmt = $conn->prepare($sql);
-                    if (!$stmt) {
-                        throw new Exception("Auto-patch failed. SQL Error: " . $conn->lastErrorMsg());
-                    }
-                } else {
-                    throw new Exception("Local Transaction Prepare Failed: " . $errMsg);
-                }
-            }
-            // ------------------------------------------------------------------
-
+            $stmt = $conn->prepare($sql);
             $stmt->bindValue(':mode', $modeOfPayment, SQLITE3_TEXT);
             $stmt->bindValue(':user', $userID, SQLITE3_INTEGER);
             $stmt->bindValue(':item', $item_id, SQLITE3_INTEGER);
@@ -300,9 +274,7 @@ try {
                         $unitPrice, $target_branch, $remoteLocalID, $transactionGroupID
                     );
                     
-                    if (!$c_stmt->execute()) {
-                        throw new Exception("Remote Transaction Insert Failed: " . $cloud_conn->error);
-                    }
+                    $c_stmt->execute();
                     
                     $new_id = $c_stmt->insert_id;
                     if ($new_id == 0) {
@@ -310,7 +282,7 @@ try {
                         if ($row = $getIdStmt->fetch_assoc()) $new_id = $row['id'];
                     }
                     
-                    if ($new_id > 0) { 
+                  if ($new_id > 0) { 
                         $cloud_conn->query("INSERT INTO cloud_change_log (table_name, record_id, branch_code, action_type) VALUES ('transactions', $new_id, '$target_branch', 'INSERT')");
                     
                         $updateStockSql = "UPDATE items SET quantity_in_stock = quantity_in_stock - ? WHERE id = ?";
@@ -320,6 +292,7 @@ try {
                             $stockStmt->execute();
                             $stockStmt->close();
 
+                            // [PROFESSIONAL FIX] Broadcast the exact Item Stock update
                             $cloud_conn->query("INSERT INTO cloud_change_log (table_name, record_id, branch_code, action_type, created_at) VALUES ('items', $item_id, '$target_branch', 'UPDATE', NOW())");
                         }
                     }
@@ -333,12 +306,8 @@ try {
                         $a_stmt->bind_param("iisisis", $remote_log_id, $finalCloudID, $remoteAction, $item_id, $target_branch, $userID, $transactionDate);
                         $a_stmt->execute();
                         $a_stmt->close();
-                    } else {
-                        throw new Exception("Remote Audit Log Failed: " . $cloud_conn->error);
                     }
                     $c_stmt->close();
-                } else {
-                    throw new Exception("Remote Prepare Statement Failed: " . $cloud_conn->error);
                 }
             } else {
                  throw new Exception("Error: Remote Sale requires an active Cloud Connection.");
@@ -357,18 +326,8 @@ try {
     ]);
 
 } catch (Exception $e) {
-    if (isset($transaction_started) && $transaction_started && isset($conn)) {
-        @$conn->exec("ROLLBACK");
-    }
-    if (isset($cloud_conn) && $cloud_conn) {
-        @$cloud_conn->close();
-    }
-    
-    http_response_code(200); 
-    echo json_encode([
-        'success' => false, 
-        'message' => "System Error: " . $e->getMessage() . " | Line: " . $e->getLine()
-    ]);
-    exit;
+    $conn->exec("ROLLBACK");
+    if ($cloud_conn) $cloud_conn->close();
+    echo json_encode(['success' => false, 'message' => $e->getMessage()]);
 }
 ?>

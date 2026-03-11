@@ -120,6 +120,9 @@ require 'defined_global_settings.php';
 			<p id="billToAddressRow"><strong>Address:</strong> <span id="billToAddress"></span></p>
             <br>
             <p><strong>Receipt No:</strong> <span id="transactionId"></span></p>
+            <div style="font-weight: bold; margin-bottom: 10px;">
+                 Payment Mode: <span id="receiptPaymentMode" style="text-transform: uppercase;">CASH</span>
+            </div>
             <p><strong>Payment Date:</strong> <span id="paymentDate"></span></p>
             <p><strong>Cashier:</strong> <?php echo htmlspecialchars($userName ?? 'System'); ?></p>
         </div>       
@@ -173,6 +176,16 @@ require 'defined_global_settings.php';
 
 		document.getElementById("billToName").innerText = billToName;
 		document.getElementById("billToAddress").innerText = billToAddress;
+
+        // Retrieve the mode of payment
+const paymentMode = localStorage.getItem("modeOfPayment");
+
+// Populate the HTML element, defaulting to 'CASH' if missing
+if (paymentMode) {
+    document.getElementById("receiptPaymentMode").innerText = paymentMode.replace('_', ' ').toUpperCase();
+} else {
+    document.getElementById("receiptPaymentMode").innerText = "CASH";
+}
 
 		// Hide Name row if empty
 		if (!billToName) {

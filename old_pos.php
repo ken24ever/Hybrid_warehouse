@@ -1,7 +1,7 @@
 <?php
 session_start(); // Make sure to start the session at the beginning of your script
 // Add this near the top of your PHP block
-$filter_branch_name = isset($_GET['branch_name']) ? urldecode($_GET['branch_name']) : "Current Branch";
+$filter_branch_name = isset($_GET['branch_name']) ? urldecode($_GET['branch_name']) : "Global Scope";
 
 if (isset($_SESSION['role'])) {
     $user_role = $_SESSION['role'];
@@ -1324,9 +1324,16 @@ $('#suggestions').off('click', '.suggestion-item').on('click', '.suggestion-item
                         console.error('Suggestions array is undefined or empty.', suggestions);
                     }
                 });
-     } else {
-                // Silently clear the input if item is not found, suppressing error messages
-                $('#itemUniqueCode').val('');
+            } else {
+                Toastify({
+                    text: response.message || 'An error occurred.',
+                    duration: 5000,
+                    gravity: 'top',
+                    close: true,
+                    style: {
+                        background: 'linear-gradient(to right, #FFA0A0, #B88AFF, #A0A0FF)',
+                    },
+                }).showToast();
             }
         },
         error: function (xhr, status, error) {
@@ -1757,7 +1764,6 @@ function processSaleSubmission(targetBranchCode) {
                 localStorage.setItem("billToAddress", $('#billToAddress').val() || '');
                 localStorage.setItem("grandTotal", totalAmount.toFixed(2));
                 localStorage.setItem("items", JSON.stringify(cartItems));
-                localStorage.setItem("modeOfPayment", modeOfPayment);
 
                 // 2. Trigger Silent Print (Load Receipt in Hidden Frame)
                 // The iframe will load receipt.php, which executes window.print() automatically.
@@ -1964,11 +1970,11 @@ function resetPosInterface() {
                 <div class="form-group">
                     <label for="targetBranchSelect" class="font-weight-bold">Sale Assigned To:</label>
                     <select class="form-control form-control-lg bg-light" id="targetBranchSelect" disabled>
-                        <option value="">Detecting Active Branch...</option>
+                        <option value="HEAD_OFFICE">Loading Context...</option>
                     </select>
                 </div>
                 <p class="text-muted small">
-                * Your User ID (<?php echo htmlspecialchars($userRole); ?>) will remain attached to this transaction for audit purposes.
+                    * Your User ID (Super Admin) will remain attached to this transaction for audit purposes.
                 </p>
             </div>
             <div class="modal-footer">
